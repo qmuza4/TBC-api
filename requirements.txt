@@ -3,7 +3,7 @@ flask
 python-dotenv
 werkzeug
 opencv-python
-tensorflow-cpu #==2.10.0 # biar bisa AVX2 FMA or something
+tensorflow #-cpu==2.10.0 # biar bisa AVX2 FMA or something
 keras
 joblib
 numpy<2.0.0

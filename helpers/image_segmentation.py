@@ -2,8 +2,8 @@ import os
 import io
 import numpy as np
 from werkzeug.utils import secure_filename
-from keras.api.models import load_model
-from keras.api.utils import normalize
+from keras.models import load_model
+from keras.utils import normalize
 from PIL import Image
 from helpers.feature_prep import load_image, build_feature
 from helpers.image_processing import blend_image_arr
