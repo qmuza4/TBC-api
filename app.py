@@ -1,15 +1,20 @@
 import os
 from flask import Flask, request, jsonify, send_file, make_response
+from flask_cors import CORS
 import mariadb
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
+from werkzeug.datastructures import FileStorage
 import joblib
 import pandas as pd
 import json
 from helpers.image_segmentation import preparation
+import io
 
 # init app dll
 app = Flask(__name__)
+
+CORS(app, origins=["http://localhost:5173"])
 
 load_dotenv()
 # app.config['MYSQL_DATABASE_USER'] = os.getenv("DB_USER", "root")
@@ -373,5 +378,42 @@ def prediction():
     res.headers['prediction-result'] = result[0]
     return res
 
+@app.route("/predictB64", methods=["POST"])
+def pred64():
+    data = json.loads(request.data)
+    if not data["model_id"] or not data["file"]:
+        return jsonify({'result': 'Error', 'message': 'Input not found'})
+    
+    import base64
+    image_bytes = base64.b64decode(data["file"])
+    image_stream = io.BytesIO(image_bytes)
+
+    import imghdr
+    image_format = imghdr.what(None, h=image_bytes)
+
+    # Create FileStorage object
+    from datetime import datetime
+
+    input_FS = FileStorage(
+        stream=image_stream,
+        filename=f"{str(datetime.now())}.{image_format}" if image_format else f"{str(datetime.now())}.jpeg",
+        content_type=f"image/{image_format}" if image_format else "application/octet-stream"
+    )
+
+    files = {'file': input_FS, 'model_id':data["model_id"]}
+
+    with app.test_client() as client:
+        res = client.post('/predict', data=files, content_type='multipart/form-data')
+    try:
+        res_headers = dict(res.headers)
+        res_B64 = base64.b64encode(res.data).decode("utf-8")
+        return jsonify({"file": res_B64, "areas_label": res_headers["areas-label"], "pred_result": res_headers["prediction-result"]})
+    except:
+        return res.data
+
+
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=os.getenv('APP_PORT', 5000))
+    
