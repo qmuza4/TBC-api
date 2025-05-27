@@ -370,12 +370,14 @@ def prediction():
     result = model.predict_proba(ratios)
 
     # hapus supaya tidak menumpuk di server 
-    os.remove(imagepath)
+    if os.path.exists(imagepath):
+        os.remove(imagepath)
 
     #jadikan satu response
     res = make_response(send_file(seg_image, mimetype='image/jpeg'))
     res.headers['areas-label'] = ratios_res
     res.headers['prediction-result'] = result[0]
+    res.headers['Content-Type'] = 'image/jpeg'
     return res
 
 @app.route("/predictB64", methods=["POST"])
