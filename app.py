@@ -1,7 +1,7 @@
 import os
 from flask import Flask, request, jsonify, send_file, make_response
 from flask_cors import CORS
-import mariadb
+from datetime import datetime
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
@@ -10,6 +10,7 @@ import pandas as pd
 import json
 from helpers.image_segmentation import preparation
 import io
+import sqlite3
 
 # init app dll
 app = Flask(__name__)
@@ -23,18 +24,10 @@ load_dotenv()
 # app.config['MYSQL_DATABASE_HOST'] = os.getenv("DB_HOST", "localhost")
 # app.config['MYSQL_DATABASE_PORT'] = int(os.getenv("DB_PORT", 3306))
 
-
 # db = MySQL()
 # db.init_app(app)
 
-conn = mariadb.connect(
-      host=os.getenv("DB_HOST", "localhost"),
-      port=int(os.getenv("DB_PORT", 330)),
-      ssl_verify_cert=True,
-      user=os.getenv("DB_USER", "root"),
-      password=os.getenv("DB_PASS", ""),
-      database=os.getenv("DB_TABLES", "tbc")
-)
+conn = sqlite3.connect(os.path.join('db', 'database.db'), check_same_thread=False)
 cursor = conn.cursor()
 
 # Dapatkan informasi semua model
@@ -51,7 +44,8 @@ def getallmodels():
 
 @app.route('/models/<id>', methods=['GET'])
 def getmodels(id):
-    cursor.execute("SELECT * FROM tbcmodels WHERE id = %(modelid)s", {'modelid': id})
+    cursor.execute("SELECT * FROM tbcmodels WHERE id = ?", (id, ))
+    # cursor.execute("SELECT * FROM tbcmodels WHERE id = %(modelid)s", {'modelid': id})
     data = cursor.fetchone()
 
     if(data):
@@ -310,7 +304,7 @@ def prediction():
     if not f:
         return jsonify({'result': 'Error', 'message': 'Input not found'})
 
-    imagepath = os.path.join('usercontent', secure_filename(f.filename))
+    imagepath = os.path.join('usercontent', f.filename)
     f.save(imagepath)
 
     '''
@@ -394,11 +388,10 @@ def pred64():
     image_format = imghdr.what(None, h=image_bytes)
 
     # Create FileStorage object
-    from datetime import datetime
 
     input_FS = FileStorage(
         stream=image_stream,
-        filename=f"{str(datetime.now())}.{image_format}" if image_format else f"{str(datetime.now())}.jpeg",
+        filename=f"{str(datetime.now().replace(microsecond=0))}.{image_format}" if image_format else f"{str(datetime.now().replace(microsecond=0))}.png",
         content_type=f"image/{image_format}" if image_format else "application/octet-stream"
     )
 

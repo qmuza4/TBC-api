@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS tbcmodels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL,
+    description TEXT
+)
