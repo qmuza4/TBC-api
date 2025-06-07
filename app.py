@@ -9,6 +9,7 @@ import joblib
 import pandas as pd
 import json
 from helpers.image_segmentation import preparation
+from helpers.supabase_storage import uploadToStorage
 import io
 import sqlite3
 
@@ -361,18 +362,21 @@ def prediction():
     
     ratios = pd.DataFrame([ratios])
 
-    result = model.predict_proba(ratios)
+    result = model.predict_proba(ratios)[0]
+
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    img_url = uploadToStorage(seg_image, str(timestamp))
 
     # hapus supaya tidak menumpuk di server 
     if os.path.exists(imagepath):
         os.remove(imagepath)
 
     #jadikan satu response
-    res = make_response(send_file(seg_image, mimetype='image/jpeg'))
-    res.headers['areas-label'] = ratios_res
-    res.headers['prediction-result'] = result[0]
-    res.headers['Content-Type'] = 'image/jpeg'
-    return res
+    # res = make_response(send_file(seg_image, mimetype='image/jpeg'))
+    # res.headers['areas-label'] = ratios_res
+    # res.headers['prediction-result'] = result[0]
+    # res.headers['Content-Type'] = 'image/jpeg'
+    return jsonify({"file": img_url, "areas_label": ratios_res, "pred_result": result.tolist()})
 
 @app.route("/predictB64", methods=["POST"])
 def pred64():
@@ -388,10 +392,10 @@ def pred64():
     image_format = imghdr.what(None, h=image_bytes)
 
     # Create FileStorage object
-
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     input_FS = FileStorage(
         stream=image_stream,
-        filename=f"{str(datetime.now().replace(microsecond=0))}.{image_format}" if image_format else f"{str(datetime.now().replace(microsecond=0))}.png",
+        filename=f"{timestamp}.{image_format}" if image_format else f"{timestamp}.png",
         content_type=f"image/{image_format}" if image_format else "application/octet-stream"
     )
 
@@ -399,13 +403,15 @@ def pred64():
 
     with app.test_client() as client:
         res = client.post('/predict', data=files, content_type='multipart/form-data')
+    return res
+    '''
     try:
         res_headers = dict(res.headers)
         res_B64 = base64.b64encode(res.data).decode("utf-8")
         return jsonify({"file": res_B64, "areas_label": res_headers["areas-label"], "pred_result": res_headers["prediction-result"]})
     except:
         return res.data
-
+    '''
 
 
 
