@@ -1,7 +1,6 @@
 import os
 import io
 import numpy as np
-from werkzeug.utils import secure_filename
 from keras.models import load_model
 from keras.utils import normalize
 from PIL import Image
