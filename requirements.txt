@@ -1,13 +1,13 @@
-scikit-learn==1.2.2 # awalnya aku 1.3.1, tapi entar joblibnya gabisa load model RF
+scikit-learn==1.2.2
 flask
 flask_cors
 python-dotenv
 werkzeug
 opencv-python
-tensorflow-cpu #-cpu==2.10.0 # biar bisa AVX2 FMA or something
+tensorflow-cpu
 keras
 joblib
 numpy<2.0.0
 pandas
 pillow
-mariadb
+supabase

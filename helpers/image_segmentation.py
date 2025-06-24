@@ -1,18 +1,13 @@
 import os
 import io
 import numpy as np
-from werkzeug.utils import secure_filename
 from keras.models import load_model
 from keras.utils import normalize
 from PIL import Image
 from helpers.feature_prep import load_image, build_feature
 from helpers.image_processing import blend_image_arr
 
-def preparation(model_id, imagepath):
-    # model lung segmentation
-    model_path = os.path.join("models", "16_100_double_UNET.hdf5" if model_id > 4 else "32_100_single_unet_030525.hdf5")
-    
-    model = load_model(model_path)
+def preparation(model, imagepath):
 
     SIZE = 256
 

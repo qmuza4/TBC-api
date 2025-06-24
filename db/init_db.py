@@ -1,3 +1,5 @@
+# Note: run sekali di awal jika belum ada database.db
+
 import sqlite3
 import os
 

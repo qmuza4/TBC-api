@@ -107,7 +107,6 @@ def build_feature(input_image, segmentation_model, colors, location_labels):
 
     # posisi label
     if np.sum(predicted_classes)>0:
-        print(f"jumlah: {np.sum(predicted_classes)}")
         location_labels.append(find_postition(pred_lung, pred_mask, colors))
         # break
     else:
