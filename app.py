@@ -12,8 +12,10 @@ from helpers.image_segmentation import preparation
 from helpers.supabase_storage import uploadToStorage
 import io
 import sqlite3
+from keras.models import load_model
 
 # init app dll
+
 app = Flask(__name__)
 
 CORS(app, origins=["http://localhost:5173", "https://tbscreen.ai"])
@@ -23,6 +25,10 @@ load_dotenv()
 # create koneksi ke database
 conn = sqlite3.connect(os.path.join('db', 'database.db'), check_same_thread=False)
 cursor = conn.cursor()
+
+# load model segmentasi
+DU_model = load_model(os.path.join("models", "16_100_double_UNET.hdf5"))
+SU_model = load_model(os.path.join("models", "32_100_single_unet_030525.hdf5"))
 
 # Dapatkan informasi semua model
 @app.route('/models', methods=['GET'])
@@ -73,7 +79,9 @@ def prediction():
     imagepath = os.path.join('usercontent', f.filename)
     f.save(imagepath)
 
-    seg_image, areas_label, area_lung, label_location, success = preparation(model_id, imagepath)
+    # id 1-4 merupakan model single UNET, sedangkan 5-8 merupakan model double UNET. dapat berubah tergantung databasenya.
+    input_model = DU_model if model_id > 4 else SU_model
+    seg_image, areas_label, area_lung, label_location, success = preparation(input_model, imagepath)
     if not success:
         return jsonify({'result': 'Error', 'message': 'Error segmenting image'})
     
