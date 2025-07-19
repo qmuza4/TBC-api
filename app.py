@@ -31,6 +31,10 @@ DU_model = load_model(os.path.join("models", "16_100_double_UNET.hdf5"))
 SU_model = load_model(os.path.join("models", "32_100_single_unet_030525.hdf5"))
 
 # Dapatkan informasi semua model
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify("Hello, world!")
+
 @app.route('/models', methods=['GET'])
 def getallmodels():
     cursor.execute("SELECT * FROM tbcmodels")
@@ -38,7 +42,7 @@ def getallmodels():
 
     res = []
     for rows in data:
-        res.append({"filename": rows[1], "description": rows[2]})
+        res.append({"id": rows[0], "filename": rows[1], "description": rows[2]})
 
     return jsonify(res)
 
