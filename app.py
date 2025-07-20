@@ -9,9 +9,10 @@ import joblib
 import pandas as pd
 import json
 from helpers.image_segmentation import preparation
-from helpers.supabase_storage import uploadToStorage, isAdmin, createUser
+from helpers.supabase_storage import uploadToStorage, isAdmin, createUser, updateUser, deleteUser
 import io
 import sqlite3
+from supabase import create_client
 from keras.models import load_model
 
 # init app dll
@@ -22,19 +23,80 @@ CORS(app, origins=["http://localhost:5173", "https://tbscreen.ai"])
 
 load_dotenv()
 
-# create koneksi ke database
+# create koneksi ke database sqlite lokal
 conn = sqlite3.connect(os.path.join('db', 'database.db'), check_same_thread=False)
 cursor = conn.cursor()
 
-# load model segmentasi
+# load model segmentasi yang berukuran besar
 DU_model = load_model(os.path.join("models", "16_100_double_UNET.hdf5"))
 SU_model = load_model(os.path.join("models", "32_100_single_unet_030525.hdf5"))
 
-# Dapatkan informasi semua model
+# create client supabase
+service_role_client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
+
+# ***~~~___ Routes ___~~~***
+
+# Section: Server-side auth. data user mayoritas dihandle di react app (frontend) dengan supabase db dan supabase auth, namun ada dungsi-fungsi spesifik
+# pada supabase.auth.admin yang memerlukan service role key khusus (Do not expose in frontend client) sehingga harus dilakukan di sini.
+
+# Buat user baru pada supabase.auth
+@app.route('/createuser', methods=['POST'])
+def registeruser():
+    data = json.loads(request.data)
+    if not data.get('admin_uuid'):
+        return jsonify({'result': 'Error', 'message': 'Unauthorized'}), 401
+    if not isAdmin(service_role_client, data.get('admin_uuid')):
+        return jsonify({'result': 'Error', 'message': 'Admin-only feature'}), 403
+    if not data.get('email') or not data.get('password'):
+        return jsonify({'result': 'Error', 'message': 'Bad Request'}), 400
+    
+    res = createUser(service_role_client, data.get('email'), data.get('password'), data.get('role', 'user'))
+
+    if res.get("error"):
+        return jsonify({'result': 'Error', 'message': res['error']['message']}), 500
+    return jsonify({'user': res['user']})
+
+# Edit data user pada pada supabase.auth
+@app.route('/updateuser/<user_uuid>', methods=['PATCH'])
+def edituser(user_uuid):
+    data = json.loads(request.data)
+    if not data.get('admin_uuid'):
+        return jsonify({'result': 'Error', 'message': 'Unauthorized'}), 401
+    if not isAdmin(service_role_client, data.get('admin_uuid')):
+        return jsonify({'result': 'Error', 'message': 'Admin-only feature'}), 403
+    
+    changable_fields = {"email", "password", "phone", "user_metadata"}
+    updated_fields = {k: v for k, v in data.items() if k in changable_fields}
+    
+    res = updateUser(service_role_client, user_uuid, updated_fields)
+
+    if res.get("error"):
+        return jsonify({'result': 'Error', 'message': res['error']['message']}), 500
+    return jsonify({'user': res['user']})
+
+# Hapus data user pada pada supabase.auth
+@app.route('/deleteuser/<user_uuid>', methods=['DELETE'])
+def removeuser(user_uuid):
+    data = json.loads(request.data)
+    if not data.get('admin_uuid'):
+        return jsonify({'result': 'Error', 'message': 'Unauthorized'}), 401
+    if not isAdmin(service_role_client, data.get('admin_uuid')):
+        return jsonify({'result': 'Error', 'message': 'Admin-only feature'}), 403
+    
+    res = deleteUser(service_role_client, user_uuid)
+
+    if res.get("error"):
+        return jsonify({'result': 'Error', 'message': res['error']['message']}), 500
+    return jsonify({'user': 'User deleted successfully'})
+
+# Section: data model. karena database model tidak mengalami banyak perubahan (tergantung update pihak developer, dan kemungkinan akan konstan most of the time)
+# dan jumlahnya kecil maka dilakukan pada sqlite lokal server, terpisah dari database user dll pada supabase
+
 @app.route('/', methods=['GET'])
 def index():
     return jsonify("Hello, world!")
 
+# Dapatkan informasi semua model
 @app.route('/models', methods=['GET'])
 def getallmodels():
     cursor.execute("SELECT * FROM tbcmodels")
@@ -59,21 +121,8 @@ def getmodels(id):
 
     return jsonify(res)
 
-@app.route('/createuser', methods=['POST'])
-def register():
-    data = json.loads(request.data)
-    if not data.get('admin_uuid'):
-        return jsonify({'result': 'Error', 'message': 'Unauthorized'})
-    if not isAdmin(data.get('admin_uuid')):
-        return jsonify({'result': 'Error', 'message': 'Unauthorized'})
-    if not data.get('email') or not data.get('password'):
-        return jsonify({'result': 'Error', 'message': 'Bad Request'})
-    
-    res= createUser(data.get('email'), data.get('password'), data.get('role', 'user'))
-
-    if res.get("error"):
-        return jsonify({'result': 'Error', 'message': res['error']['message']})
-    return jsonify({'user': res['user']})
+# Section: Machine learning models. tujuan utama dari penggunaan server backend dengan python. route-route dibawah berhubungan dengan model yang dibuat oleh team AI,
+# meng-load model dan melakukan segmentasi serta klasifikasi dari file citra yang dimasukkan
 
 # Route prediksi, input berupa form-data dengan file: file x-ray dan model_id: integer, id dari model
 @app.route('/predict', methods=['POST'])
@@ -81,7 +130,7 @@ def prediction():
     try:
         model_id = json.loads(request.form['model_id'])
     except:
-        return jsonify({'result': 'Error', 'message': 'Model not selected'})
+        return jsonify({'result': 'Error', 'message': 'Model not selected'}), 400
     
     model_fp = getmodels(model_id).json['filename']
     modelpath = os.path.join('models', model_fp)
@@ -90,11 +139,11 @@ def prediction():
         with open(modelpath, 'rb') as f:
             model = joblib.load(f)
     except:
-        return jsonify({'result': 'Error', 'message': 'Error loading model'})
+        return jsonify({'result': 'Error', 'message': 'Error loading model'}), 500
 
     f = request.files['file']
     if not f:
-        return jsonify({'result': 'Error', 'message': 'Input not found'})
+        return jsonify({'result': 'Error', 'message': 'Input not found'}), 400
 
     imagepath = os.path.join('usercontent', f.filename)
     f.save(imagepath)
@@ -103,7 +152,7 @@ def prediction():
     input_model = DU_model if model_id > 4 else SU_model
     seg_image, areas_label, area_lung, label_location, success = preparation(input_model, imagepath)
     if not success:
-        return jsonify({'result': 'Error', 'message': 'Error segmenting image'})
+        return jsonify({'result': 'Error', 'message': 'Error segmenting image'}), 500
     
     labels = [
         'background', 
@@ -137,7 +186,9 @@ def prediction():
 
     # Upload ke image storage
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    img_url = uploadToStorage(seg_image, "ai-analysis-" + str(timestamp))
+    img_url = uploadToStorage(service_role_client, os.getenv("SUPABASE_URL"), seg_image, "ai-analysis-" + str(timestamp))
+    if img_url is None:
+        return jsonify({'result': 'Error', 'message': 'Error uploading to storage bucket'}), 500
 
     # hapus supaya tidak menumpuk di server 
     if os.path.exists(imagepath):
@@ -151,7 +202,7 @@ def prediction():
 def pred64():
     data = json.loads(request.data)
     if not data["model_id"] or not data["file"]:
-        return jsonify({'result': 'Error', 'message': 'Input not found'})
+        return jsonify({'result': 'Error', 'message': 'Input not found'}), 400
     
     # Revert base64 string to bytes
     import base64
