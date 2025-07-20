@@ -9,7 +9,7 @@ import joblib
 import pandas as pd
 import json
 from helpers.image_segmentation import preparation
-from helpers.supabase_storage import uploadToStorage
+from helpers.supabase_storage import uploadToStorage, isAdmin, createUser
 import io
 import sqlite3
 from keras.models import load_model
@@ -58,6 +58,22 @@ def getmodels(id):
         res = "model not found"
 
     return jsonify(res)
+
+@app.route('/createuser', methods=['POST'])
+def register():
+    data = json.loads(request.data)
+    if not data.get('admin_uuid'):
+        return jsonify({'result': 'Error', 'message': 'Unauthorized'})
+    if not isAdmin(data.get('admin_uuid')):
+        return jsonify({'result': 'Error', 'message': 'Unauthorized'})
+    if not data.get('email') or not data.get('password'):
+        return jsonify({'result': 'Error', 'message': 'Bad Request'})
+    
+    res= createUser(data.get('email'), data.get('password'), data.get('role', 'user'))
+
+    if res.get("error"):
+        return jsonify({'result': 'Error', 'message': res['error']['message']})
+    return jsonify({'user': res['user']})
 
 # Route prediksi, input berupa form-data dengan file: file x-ray dan model_id: integer, id dari model
 @app.route('/predict', methods=['POST'])
