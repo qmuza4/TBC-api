@@ -137,7 +137,7 @@ def prediction():
 
     # Upload ke image storage
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    img_url = uploadToStorage(seg_image, str(timestamp))
+    img_url = uploadToStorage(seg_image, "ai-analysis-" + str(timestamp))
 
     # hapus supaya tidak menumpuk di server 
     if os.path.exists(imagepath):
