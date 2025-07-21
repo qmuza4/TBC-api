@@ -156,6 +156,8 @@ def prediction():
     if not f:
         return jsonify({'result': 'Error', 'message': 'Input not found'}), 400
 
+    if not os.path.exists('usercontent'):
+        os.makedirs('usercontent')
     imagepath = os.path.join('usercontent', f.filename)
     f.save(imagepath)
 
