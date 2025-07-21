@@ -1,3 +1,5 @@
+import requests
+
 def uploadToStorage(client, url, image, imagename):
     try:
         res = client.storage.from_("diagnosis-image").upload(imagename, image.getvalue(), {"content-type": "image/jpeg"})
@@ -7,9 +9,21 @@ def uploadToStorage(client, url, image, imagename):
     except:
         return None
 
-def isAdmin(client, uuid):
+def isAdmin(client, url, anon_key, bearer_token):
     try:
-        res = client.from_("users").select("role").eq("auth_uuid", uuid).maybe_single().execute()
+        headers = {
+            'Authorization': bearer_token, # raw token, format "Bearer eyJ ...." 
+            'apikey': anon_key
+        }
+        tokenRes = requests.get(f"{url}/auth/v1/user", headers=headers)
+        if tokenRes.status_code != 200:
+            return False
+        userRes = tokenRes.json()
+        role_from_metadata = userRes.get('user_metadata', {}).get('role') # kalo ngga ada user metadata default ke object kosong biar tetep bisa call get()
+        if role_from_metadata is not None:
+            return (role_from_metadata == "admin")
+        uuid = userRes.get('id')
+        res = client.from_("users").select("role").eq("auth_uuid", uuid).maybe_single().execute() # kalo ngga ada di metadata, cek ke db
         return (res.model_dump()["data"]["role"] == "admin")
     except:
         return False
@@ -21,7 +35,7 @@ def createUser(service_role_client, email, password, role="user"):
             "email": email,
             "password": password,
             "user_metadata": user_metadata,
-            "email_confirm": True
+            "email_confirm": True # asumsi email yang diinput admin udah trusted
         })
         return res.model_dump() # convert SimpleApiResponse to JSON
     except:

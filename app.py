@@ -32,7 +32,10 @@ DU_model = load_model(os.path.join("models", "16_100_double_UNET.hdf5"))
 SU_model = load_model(os.path.join("models", "32_100_single_unet_030525.hdf5"))
 
 # create client supabase
-service_role_client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+service_role_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 # ***~~~___ Routes ___~~~***
 
@@ -42,11 +45,15 @@ service_role_client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABA
 # Buat user baru pada supabase.auth
 @app.route('/createuser', methods=['POST'])
 def registeruser():
-    data = json.loads(request.data)
-    if not data.get('admin_uuid'):
+    bearer_token = request.headers.get('Authorization', '')
+    if not bearer_token:
         return jsonify({'result': 'Error', 'message': 'Unauthorized'}), 401
-    if not isAdmin(service_role_client, data.get('admin_uuid')):
+    if not isAdmin(service_role_client, SUPABASE_URL, SUPABASE_ANON_KEY, bearer_token):
         return jsonify({'result': 'Error', 'message': 'Admin-only feature'}), 403
+    try:
+        data = json.loads(request.data)
+    except:
+        return jsonify({'result': 'Error', 'message': 'Bad Request'}), 400
     if not data.get('email') or not data.get('password'):
         return jsonify({'result': 'Error', 'message': 'Bad Request'}), 400
     
@@ -59,11 +66,15 @@ def registeruser():
 # Edit data user pada pada supabase.auth
 @app.route('/updateuser/<user_uuid>', methods=['PATCH'])
 def edituser(user_uuid):
-    data = json.loads(request.data)
-    if not data.get('admin_uuid'):
+    bearer_token = request.headers.get('Authorization', '')
+    if not bearer_token:
         return jsonify({'result': 'Error', 'message': 'Unauthorized'}), 401
-    if not isAdmin(service_role_client, data.get('admin_uuid')):
+    if not isAdmin(service_role_client, SUPABASE_URL, SUPABASE_ANON_KEY, bearer_token):
         return jsonify({'result': 'Error', 'message': 'Admin-only feature'}), 403
+    try:
+        data = json.loads(request.data)
+    except:
+        return jsonify({'result': 'Error', 'message': 'Bad Request'}), 400
     
     changable_fields = {"email", "password", "phone", "user_metadata"}
     updated_fields = {k: v for k, v in data.items() if k in changable_fields}
@@ -77,10 +88,10 @@ def edituser(user_uuid):
 # Hapus data user pada pada supabase.auth
 @app.route('/deleteuser/<user_uuid>', methods=['DELETE'])
 def removeuser(user_uuid):
-    data = json.loads(request.data)
-    if not data.get('admin_uuid'):
+    bearer_token = request.headers.get('Authorization', '')
+    if not bearer_token:
         return jsonify({'result': 'Error', 'message': 'Unauthorized'}), 401
-    if not isAdmin(service_role_client, data.get('admin_uuid')):
+    if not isAdmin(service_role_client, SUPABASE_URL, SUPABASE_ANON_KEY, bearer_token):
         return jsonify({'result': 'Error', 'message': 'Admin-only feature'}), 403
     
     res = deleteUser(service_role_client, user_uuid)
@@ -148,8 +159,7 @@ def prediction():
     imagepath = os.path.join('usercontent', f.filename)
     f.save(imagepath)
 
-    # id 1-4 merupakan model single UNET, sedangkan 5-8 merupakan model double UNET. dapat berubah tergantung databasenya.
-    input_model = DU_model if model_id > 4 else SU_model
+    input_model = DU_model if ("doubleUnet" in model_fp) else SU_model
     seg_image, areas_label, area_lung, label_location, success = preparation(input_model, imagepath)
     if not success:
         return jsonify({'result': 'Error', 'message': 'Error segmenting image'}), 500
