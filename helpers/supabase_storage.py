@@ -21,10 +21,12 @@ def isAdmin(client, url, anon_key, bearer_token):
         userRes = tokenRes.json()
         role_from_metadata = userRes.get('user_metadata', {}).get('role') # kalo ngga ada user metadata default ke object kosong biar tetep bisa call get()
         if role_from_metadata is not None:
-            return (role_from_metadata == "admin")
+            print(role_from_metadata + " " + str("admin" in role_from_metadata))
+            return ("admin" in role_from_metadata)
         uuid = userRes.get('id')
         res = client.from_("users").select("role").eq("auth_uuid", uuid).maybe_single().execute() # kalo ngga ada di metadata, cek ke db
-        return (res.model_dump()["data"]["role"] == "admin")
+        print(res.model_dump()["data"]["role"] + " " + str("admin" in res.model_dump()["data"]["role"]))
+        return ("admin" in res.model_dump()["data"]["role"])
     except:
         return False
 
