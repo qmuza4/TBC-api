@@ -74,7 +74,7 @@ def find_postition(lung, mask, colors):
       location[cls] = -1
   return location
 
-def build_feature(input_image, segmentation_model, colors, location_labels):
+def build_feature(input_image_area, input_image_label, segmentation_model, label_model, colors):
     """
         membuat featur dan output dari data baru
         feature:
@@ -83,9 +83,11 @@ def build_feature(input_image, segmentation_model, colors, location_labels):
         return:
             image prediction, feature
     """
+    location_labels = []
+
     # Prediction process
     ## Lung Prediction
-    y_pred_lung = segmentation_model.predict(input_image)
+    y_pred_lung = segmentation_model.predict(input_image_area)
     pred_lung = (y_pred_lung[0,:,:,0]> 0.5).astype(np.uint8)
     save_pred_lung = pred_lung.copy()
     save_pred_lung[save_pred_lung == 1] = 255
@@ -93,14 +95,14 @@ def build_feature(input_image, segmentation_model, colors, location_labels):
     area_lung = np.sum(pred_lung)
     
     ## Label Prediction
-    y_pred_label = segmentation_model.predict(input_image)[0]
+    y_pred_label = label_model.predict(input_image_label)[0]
     ### Ambil label per piksel
-    pred_mask = np.argmax(y_pred_label, axis=-1) # Bentuk: (SIZE, SIZE)
+    pred_mask = np.argmax(y_pred_label, axis=-1) # Bentuk: (SIZE, SIZE)  
     ### ---- MODIFIKASI: Cetak kelas-kelas yang terprediksi sebelum mapping warna ----
     predicted_classes = np.unique(pred_mask)
     
     ### Konversi mask ke citra RGB
-    image_label_prediction = label_to_rgb(pred_mask, colors)
+    rgb_image_label_prediction = label_to_rgb(pred_mask, colors)
 
     ### Hitung luas area untuk tiap kelas
     areas = calculate_areas(pred_mask, colors)
@@ -112,4 +114,4 @@ def build_feature(input_image, segmentation_model, colors, location_labels):
     else:
         location_labels.append({0: -1, 1: -1, 2:-1, 3: -1, 4: -1, 5: -1, 6: -1})
     
-    return image_label_prediction, areas, area_lung, location_labels
+    return rgb_image_label_prediction, areas, area_lung, location_labels

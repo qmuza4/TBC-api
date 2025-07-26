@@ -1,9 +1,8 @@
 import os
-from flask import Flask, request, jsonify, send_file, make_response
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
 from dotenv import load_dotenv
-from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 import joblib
 import pandas as pd
@@ -19,7 +18,7 @@ from keras.models import load_model
 
 app = Flask(__name__)
 
-CORS(app, origins=["http://localhost:5173", "https://tbscreen.ai"])
+CORS(app)
 
 load_dotenv()
 
@@ -28,8 +27,9 @@ conn = sqlite3.connect(os.path.join('db', 'database.db'), check_same_thread=Fals
 cursor = conn.cursor()
 
 # load model segmentasi yang berukuran besar
-DU_model = load_model(os.path.join("models", "16_100_double_UNET.hdf5"))
-SU_model = load_model(os.path.join("models", "32_100_single_unet_030525.hdf5"))
+Lung_seg_model = load_model(os.path.join("models", "Model_lungSegmentation_clahe.hdf5"))    
+DU_model = load_model(os.path.join("models", "double_unet_all_16batch Juli v2.hdf5"))
+SU_model = load_model(os.path.join("models", "single_unet_all_32batch_CE_softmax2.hdf5"))
 
 # create client supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -161,13 +161,12 @@ def prediction():
     imagepath = os.path.join('usercontent', f.filename)
     f.save(imagepath)
 
-    input_model = DU_model if ("doubleUnet" in model_fp) else SU_model
-    seg_image, areas_label, area_lung, label_location, success = preparation(input_model, imagepath)
+    input_label_model = DU_model if ("doubleUnet" in model_fp) else SU_model
+    seg_image, areas_label, area_lung, label_location, success = preparation(Lung_seg_model, input_label_model, imagepath, model_fp)
     if not success:
         return jsonify({'result': 'Error', 'message': 'Error segmenting image'}), 500
     
     labels = [
-        'background', 
         'luas blue', 
         'luas pengganti putih', 
         'luas brown',
@@ -183,14 +182,16 @@ def prediction():
     ]
 
     ratios = {}
-    for i in range(1, 7):
-        ratios[labels[i]] = areas_label[i] / area_lung
+    for i in range(0, 6):
+        ratios[labels[i]] = areas_label[i+1] #areas label ada background di index 0
     
     ratios_res = ratios.copy()
+    for i in range(0, 6):
+        ratios_res[labels[i]] /= area_lung
 
     if "posisi" in model_fp:
-        for i in range(7, 13):
-            ratios[labels[i]] = label_location[i-6]
+        for i in range(6, 12):
+            ratios[labels[i]] = label_location[i-5]
     
     ratios = pd.DataFrame([ratios])
 
